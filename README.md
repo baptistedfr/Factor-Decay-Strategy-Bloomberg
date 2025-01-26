@@ -1,0 +1,2 @@
+# Factor Decay Strategy Bloomberg
+ 
