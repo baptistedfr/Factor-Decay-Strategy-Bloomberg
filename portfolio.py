@@ -58,7 +58,7 @@ class FractilePortfolio:
         ----------
         pd.DataFrame : titles in portfolio
         """
-        df_ptf = self.df_universe[self.df_universe[f"Fractile {self.target_factor}"].isin([1, self.nb_fractile])]
+        df_ptf = self.df_universe
 
         num_long = len(df_ptf[df_ptf[f"Fractile {self.target_factor}"] == 1])
         num_short = len(df_ptf[df_ptf[f"Fractile {self.target_factor}"] == self.nb_fractile])
@@ -66,7 +66,9 @@ class FractilePortfolio:
         # The pd.cut function compute the 1 fractile as the worst fractile
         if self.weighting_type == Weighting_Type.EQUAL_WEIGHT:
             df_ptf['Weight'] = df_ptf[f"Fractile {self.target_factor}"].apply(
-                    lambda x: 1 / num_long if x == self.nb_fractile else -1 / num_short)
+                lambda x: 1 / num_long if x == self.nb_fractile else 
+                        -1 / num_short if x == 1 else 
+                        0)
         else:
             raise Exception("Weighting method not implemented yet or not existing")
 
@@ -91,21 +93,29 @@ class FractilePortfolio:
 
         return pd.Series(factor_exposures)
 
-    def process_ptf(self, save: bool = True) -> Tuple[pd.DataFrame, pd.Series]:
+    def process_ptf(self, build: bool = False, save: bool = False, df_new: pd.DataFrame = None) -> Tuple[pd.DataFrame, pd.Series]:
         """
-        Create the portfolio and compute the factor exposure.
+        Create the portfolio with maximal target factor exposure.
+        Compute the portfolio sensibility to each sensi factors.
 
         Parameters:
         ------------
         save : bool
-            Save or not the data in csv format
+            Save or not the portfolio in csv format
         """
         self._compute_zscore_fractile()
-        df_ptf = self._apply_weights()
+        if build:
+            df_ptf = self._apply_weights()
+        else:
+            self.df_universe = df_new
+            self._compute_zscore_fractile()
+            df_ptf = self.df_universe
+
 
         ptf_sensi = self._compute_factor_exposure(df_ptf)
 
         if save:
             df_ptf.to_csv(f"Output//Portfolio_{self.target_factor}_{self.nb_fractile}F.csv", index=False)
             ptf_sensi.to_csv(f"Output//Sensi_{self.target_factor}_{self.nb_fractile}F.csv", index=False)
+
         return df_ptf, ptf_sensi

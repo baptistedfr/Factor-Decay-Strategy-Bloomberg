@@ -61,31 +61,38 @@ warnings.filterwarnings("ignore")
 df_factors = pd.read_excel("Input/S&P500_Factors.xlsx")
 df_factors = df_factors.rename(columns={"Value (P/B)": "Value", 'Momentum (12m)': "Momentum",
                                         "Low Volatility (252d)": "Low Vol", 'Quality (ROE)': "Quality"})
-dates = set(df_factors["Date"])
 
-df_sensi = pd.DataFrame()
-for date in sorted(dates):
-    df_date = df_factors[df_factors["Date"] == date]
-    ptf = FractilePortfolio(df_universe=df_date, target_factor="Momentum")
-    df_ptf, ptf_sensi = ptf.process_ptf(save=False)
-    df_sensi = pd.concat([df_sensi, pd.DataFrame([{"Date": date, **ptf_sensi}])])
+from analysis import PortfolioAnalysis
+ptf_analysis = PortfolioAnalysis(df_universe=df_factors, target_factor="Momentum")
 
-print(df_sensi)
+ptf_analysis.process_all_dates()
 
-df_sensi["Date"] = pd.to_datetime(df_sensi["Date"])
-fig = go.Figure()
-for column in df_sensi.columns[1:]:
-    fig.add_trace(go.Scatter(
-        x=df_sensi["Date"],
-        y=df_sensi[column],
-        mode="lines+markers",
-        name=column
-    ))
-fig.update_layout(
-    title="Évolution des facteurs au fil du temps",
-    xaxis_title="Date",
-    yaxis_title="Valeur",
-    legend_title="Facteur",
-    template="plotly_white"
-)
-fig.show()
+
+# dates = set(df_factors["Date"])
+
+# df_sensi = pd.DataFrame()
+# for date in sorted(dates):
+#     df_date = df_factors[df_factors["Date"] == date]
+#     ptf = FractilePortfolio(df_universe=df_date, target_factor="Momentum")
+#     df_ptf, ptf_sensi = ptf.process_ptf(save=False)
+#     df_sensi = pd.concat([df_sensi, pd.DataFrame([{"Date": date, **ptf_sensi}])])
+
+# print(df_sensi)
+
+# df_sensi["Date"] = pd.to_datetime(df_sensi["Date"])
+# fig = go.Figure()
+# for column in df_sensi.columns[1:]:
+#     fig.add_trace(go.Scatter(
+#         x=df_sensi["Date"],
+#         y=df_sensi[column],
+#         mode="lines+markers",
+#         name=column
+#     ))
+# fig.update_layout(
+#     title="Évolution des facteurs au fil du temps",
+#     xaxis_title="Date",
+#     yaxis_title="Valeur",
+#     legend_title="Facteur",
+#     template="plotly_white"
+# )
+# fig.show()
