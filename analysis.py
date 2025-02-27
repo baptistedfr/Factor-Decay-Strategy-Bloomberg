@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from portfolio import FractilePortfolio
+from portfolio import BasePortfolio, FractilePortfolio
 from Utilities import Universe
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -36,7 +36,7 @@ class PortfolioAnalysis:
         # logging.info("Données chargées et triées par date.")
     
 
-    def get_factor_information(self, target_factor: str, sensi_factors: list[str], computation_date_str : str, plot = True):
+    def get_factor_information(self, target_factor: str, sensi_factors: list[str], computation_date_str : str, Portfolio : BasePortfolio = FractilePortfolio, plot = True):
         """
         Construct the portfolio at the first date and get the sensi at each following date.
         Args:
@@ -73,11 +73,13 @@ class PortfolioAnalysis:
         self.universe_filtered['Market'] = market_df
         
         factor_df = self.__construct_dataframe_factors(sensi_factors, computation_date_dt)
+        returns_df = self.universe_filtered['Returns']
         all_dates = sorted(set(factor_df["Date"].tolist()))
 
-        ptf_construction = FractilePortfolio(df_factor=factor_df, target_factor=target_factor, sensi_factors=sensi_factors)
-
-        initial_ptf, first_sensi = ptf_construction.process_ptf(factor_df.loc[factor_df["Date"] == all_dates[0], :], rebalance_weight=True)
+        ptf_construction : BasePortfolio = Portfolio(df_factor=factor_df, target_factor=target_factor, sensi_factors=sensi_factors)
+        initial_ptf, first_sensi = ptf_construction.construct_portfolio(factor_df.loc[factor_df["Date"] == all_dates[0], :], 
+                                                                        rebalance_weight=True, 
+                                                                        returns = returns_df.loc[returns_df['Date'] <= all_dates[0], :])
         # Keep in memory the weights optimized for the given factor
         weights = initial_ptf["Weight"].tolist()
 
@@ -88,7 +90,9 @@ class PortfolioAnalysis:
             df_date = factor_df[factor_df["Date"] == date].copy()
             df_date["Weight"] = weights
             # Compute the sensi
-            _, sensi_date = ptf_construction.process_ptf(df_date, rebalance_weight=False)
+            _, sensi_date = ptf_construction.construct_portfolio(df_date, 
+                                                                 rebalance_weight=False,
+                                                                 returns = None)
             sensi_records.append({"Date": date, **sensi_date.to_dict()})
 
 
@@ -113,7 +117,8 @@ class PortfolioAnalysis:
         """
         # Récupérer les prix et aligner les autres datasets
         price_df = self.universe_filtered['Price'].set_index("Date")
-        
+        returns_df = price_df.pct_change().dropna()
+
         # Initialiser la structure du DataFrame final
         factor_df = pd.DataFrame()
         factor_df["Date"] = np.repeat(price_df.index, len(price_df.columns))
@@ -143,7 +148,6 @@ class PortfolioAnalysis:
         
         if "Market" in sensi_factors:
             market_prices = self.universe_filtered['Market'].set_index("Date").reindex(price_df.index).ffill()
-            returns_df = price_df.pct_change().dropna()
             market_return = market_prices.pct_change().dropna()
 
             beta_df = pd.DataFrame(index=returns_df.index, columns=returns_df.columns)
@@ -161,6 +165,7 @@ class PortfolioAnalysis:
 
         #  Filtrer sur les dates > start_date
         factor_df = factor_df.loc[factor_df["Date"] > computation_date_dt, :]
+        self.universe_filtered['Returns'] = returns_df.reset_index('Date')
         print("Calcul des facteurs terminé.")
         return factor_df
 

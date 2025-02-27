@@ -1,6 +1,6 @@
 import pandas as pd
 import warnings
-from portfolio import FractilePortfolio
+from portfolio import FractilePortfolio, PureFactorPortfolio
 import plotly.graph_objects as go
 from Utilities import Universe
 warnings.filterwarnings("ignore")
@@ -12,6 +12,9 @@ warnings.filterwarnings("ignore")
 
 from analysis import PortfolioAnalysis
 ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
-sensibilities, half_life = ptf_analysis.get_factor_information("Momentum",["Momentum","Value","Quality","Low Volatility","Market"],"2013-03-31")
+sensibilities, half_life = ptf_analysis.get_factor_information(target_factor = "Low Volatility",
+                                                               sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"],
+                                                               computation_date_str = "2017-06-12",
+                                                               Portfolio = FractilePortfolio)
 print(half_life)
 # print(sensibilities)
