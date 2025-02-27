@@ -12,4 +12,6 @@ warnings.filterwarnings("ignore")
 
 from analysis import PortfolioAnalysis
 ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
-sensibilities = ptf_analysis.get_factor_information("Quality",["Momentum","Value","Quality","Low Volatility"],"2017-01-01")
+sensibilities, half_life = ptf_analysis.get_factor_information("Momentum",["Momentum","Value","Quality","Low Volatility","Market"],"2013-03-31")
+print(half_life)
+# print(sensibilities)

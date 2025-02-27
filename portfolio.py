@@ -101,7 +101,7 @@ class FractilePortfolio:
         return pd.Series(factor_exposures)
         #return (df_ptf.set_index('Ticker')[self.sensi_factors].mul(df_ptf['Weight'], axis=0)).sum()
 
-    def process_ptf(self, df_factor : pd.DataFrame, rebalance_weight: bool = False, save: bool = False) -> Tuple[pd.DataFrame, pd.Series]:
+    def process_ptf(self, df_factor : pd.DataFrame, rebalance_weight: bool = False) -> Tuple[pd.DataFrame, pd.Series]:
         """
         Create the portfolio with maximal target factor exposure.
         Compute the portfolio sensibility to each sensi factors.
@@ -119,10 +119,6 @@ class FractilePortfolio:
                 raise ValueError("Please Provide a Weight column")
 
         ptf_sensi = self._compute_factor_exposure(df_ptf)
-
-        if save:
-            df_ptf.to_csv(f"Output//Portfolio_{self.target_factor}_{self.nb_fractile}F.csv", index=False)
-            ptf_sensi.to_csv(f"Output//Sensi_{self.target_factor}_{self.nb_fractile}F.csv", index=False)
 
         return df_ptf, ptf_sensi 
 
