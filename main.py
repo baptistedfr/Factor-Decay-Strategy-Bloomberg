@@ -40,9 +40,10 @@ def generate_half_life_analysis():
 ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
 sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
 sensi = "Momentum"
-portfolio = PureFactorPortfolio
-date = "2004-03-31"
+portfolio = FractilePortfolio
 
+
+# date = "2004-03-31"
 # sensibilities, half_life = ptf_analysis.get_factor_information(
 #                         target_factor=sensi,
 #                         sensi_factors=sensi_factors,
@@ -51,14 +52,15 @@ date = "2004-03-31"
 #                         plot = True  
 #                     )
 
-start_date = "2010-03-31"
-end_date = "2019-03-31"
+start_date = "2013-03-31"
+end_date = "2025-01-31"
 combined_results = ptf_analysis.compare_strategies(
                         target_factor=sensi,
                         sensi_factors=sensi_factors,
                         start_date_str=start_date,
                         end_date_str=end_date,
                         Portfolio=portfolio,
+                        transaction_fees = 0.0
                     )
 
 print(combined_results.df_statistics.head(10))

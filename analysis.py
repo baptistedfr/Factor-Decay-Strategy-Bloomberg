@@ -42,7 +42,8 @@ class PortfolioAnalysis:
                             start_date_str : str,
                             end_date_str : str, 
                             Portfolio : BasePortfolio = FractilePortfolio,
-                            rebalance_type : FrequencyType = FrequencyType.MONTHLY):
+                            rebalance_type : FrequencyType = FrequencyType.MONTHLY,
+                            transaction_fees : float = 0.0):
         
         start_date_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
         end_date_dt = datetime.strptime(end_date_str, "%Y-%m-%d")
@@ -77,7 +78,8 @@ class PortfolioAnalysis:
                                                                 target_factor,
                                                                 all_dates, 
                                                                 rebalance_type,
-                                                                f"{target_factor} Basic strategy {Portfolio.__name__}")
+                                                                f"{target_factor} Basic strategy {Portfolio.__name__}",
+                                                                fees = transaction_fees)
         
         # Stratégie 2 : Rebalancement à mi-période (half-date)
         results_half_date_strat = self.compute_strategy_performance(portfolio,
@@ -86,7 +88,8 @@ class PortfolioAnalysis:
                                                                     target_factor,
                                                                     all_dates,
                                                                     FrequencyType.HALF_EXPOSURE,
-                                                                    f"{target_factor} Half life strategy {Portfolio.__name__}")
+                                                                    f"{target_factor} Half life strategy {Portfolio.__name__}",
+                                                                    fees = transaction_fees)
     
         combined_results = Results.compare_results([results_basic_strat,results_half_date_strat])
 
