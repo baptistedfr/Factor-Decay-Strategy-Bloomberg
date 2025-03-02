@@ -2,19 +2,26 @@ import pandas as pd
 import warnings
 from portfolio import FractilePortfolio, PureFactorPortfolio
 import plotly.graph_objects as go
-from Utilities import Universe
+from tqdm import tqdm
+from Utilities import generate_half_life_analysis 
 warnings.filterwarnings("ignore")
 
 
-# df_factors = pd.read_excel("Input/S&P500_Factors.xlsx")
-# df_factors = df_factors.rename(columns={"Value (P/B)": "Value", 'Momentum (12m)': "Momentum",
-#                                         "Low Volatility (252d)": "Low Vol", 'Quality (ROE)': "Quality"})
+from analysis import PortfolioAnalysis, Universe
 
-from analysis import PortfolioAnalysis
+
+
+# generate_half_life_analysis()
 ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
-sensibilities, half_life = ptf_analysis.get_factor_information(target_factor = "Low Volatility",
-                                                               sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"],
-                                                               computation_date_str = "2017-06-12",
-                                                               Portfolio = FractilePortfolio)
-print(half_life)
-# print(sensibilities)
+sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
+sensi = "Momentum"
+portfolio = PureFactorPortfolio
+date = "2004-03-31"
+
+sensibilities, half_life = ptf_analysis.get_factor_information(
+                        target_factor=sensi,
+                        sensi_factors=sensi_factors,
+                        computation_date_str=date,
+                        Portfolio=portfolio,
+                        plot = True  
+                    )

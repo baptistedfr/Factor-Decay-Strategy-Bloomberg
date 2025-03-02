@@ -1,13 +1,15 @@
 import pandas as pd
 import numpy as np
 from portfolio import BasePortfolio, FractilePortfolio
-from Utilities import Universe
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import logging
 import plotly.express as px
-
+from enum import Enum
 logging.basicConfig(level=logging.INFO)
+
+class Universe(Enum):
+    SP500  = {"compo": "COMPO_SP500.parquet", "Price": "PX_LAST.parquet", "Price To Book":"PriceToBook.parquet", "ROE":"ROE.parquet"}
 
 class PortfolioAnalysis:
 
@@ -36,7 +38,11 @@ class PortfolioAnalysis:
         # logging.info("Données chargées et triées par date.")
     
 
-    def get_factor_information(self, target_factor: str, sensi_factors: list[str], computation_date_str : str, Portfolio : BasePortfolio = FractilePortfolio, plot = True):
+    def get_factor_information(self, target_factor: str, 
+                               sensi_factors: list[str], 
+                               computation_date_str : str, 
+                               Portfolio : BasePortfolio = FractilePortfolio, 
+                               plot = True):
         """
         Construct the portfolio at the first date and get the sensi at each following date.
         Args:
@@ -55,25 +61,29 @@ class PortfolioAnalysis:
         tickers_universe = [
             ticker + " Equity" for ticker in closest_row_universe.loc[:, closest_row_universe.eq(1).iloc[0]].columns.to_list()
         ]
-        print(f"Nombre de tickers sélectionnés : {len(tickers_universe)}")
+        
         common_tickers = self.get_common_tickers(self.universe_data, tickers_universe)
-        print(f"Nombre de tickers communs dans toutes les données : {len(common_tickers)}")
+        
 
         # Filtrage des données en fonction de la date et des tickers sélectionnés
-        price_df = self.universe_data['Price']  # DataFrame Price
+        price_df = self.universe_data['Price'] 
         start_date, end_date = self.get_analysis_dates(price_df, computation_date_dt)
-        print(f"Période d'analyse : {start_date} -> {end_date}")
         
         self.universe_filtered = {
             key: df.loc[(df['Date'] >= start_date) & (df['Date'] <= end_date), ['Date'] + list(common_tickers)]
             for key, df in self.universe_data.items() if key != 'compo'
         }
+        
+        # Add the Market 
         price_df = self.universe_data['Price']
         market_df = price_df.loc[(price_df['Date'] >= start_date) & (price_df['Date'] <= end_date), ['Date', 'SPX Index']]
         self.universe_filtered['Market'] = market_df
-        
-        factor_df = self.__construct_dataframe_factors(sensi_factors, computation_date_dt)
-        returns_df = self.universe_filtered['Returns']
+
+        returns_df = self.universe_filtered['Price'].set_index("Date").pct_change().dropna().reset_index('Date')
+        self.universe_filtered['Returns'] = returns_df
+    
+        factor_df = self.__construct_dataframe_factors(self.universe_filtered, sensi_factors, computation_date_dt)
+
         all_dates = sorted(set(factor_df["Date"].tolist()))
 
         ptf_construction : BasePortfolio = Portfolio(df_factor=factor_df, target_factor=target_factor, sensi_factors=sensi_factors)
@@ -98,14 +108,17 @@ class PortfolioAnalysis:
 
         sensi_historic = pd.DataFrame(sensi_records)
         half_life_date, half_life_days = self.compute_half_life_factor(sensi_historic, target_factor) 
-
+        
         if plot:
+            print(f"Nombre de tickers sélectionnés : {len(tickers_universe)}")
+            print(f"Nombre de tickers communs dans toutes les données : {len(common_tickers)}")
+            print(f"Période d'analyse : {start_date} -> {end_date}")
             self.plot_sensibilities(sensi_historic, target_factor, computation_date_str, half_life_date)
 
-        
         return sensi_historic, half_life_days
     
-    def __construct_dataframe_factors(self, sensi_factors: list[str], computation_date_dt : datetime):
+    @staticmethod
+    def __construct_dataframe_factors(universe_filtered, sensi_factors: list[str], computation_date_dt : datetime):
         """
         Calcule les facteurs demandés et retourne un DataFrame avec une ligne par ticker/date.
         
@@ -116,8 +129,8 @@ class PortfolioAnalysis:
             pd.DataFrame: DataFrame structuré avec une colonne par facteur.
         """
         # Récupérer les prix et aligner les autres datasets
-        price_df = self.universe_filtered['Price'].set_index("Date")
-        returns_df = price_df.pct_change().dropna()
+        price_df = universe_filtered['Price'].set_index("Date")
+        returns_df = universe_filtered['Returns'].set_index("Date")
 
         # Initialiser la structure du DataFrame final
         factor_df = pd.DataFrame()
@@ -127,7 +140,7 @@ class PortfolioAnalysis:
         # Ajouter chaque facteur comme une colonne
         if "Value" in sensi_factors:
             # print("Calcul du facteur Value (P/B)...")
-            ptb_df = self.universe_filtered['Price To Book'].set_index("Date").reindex(price_df.index).ffill()
+            ptb_df = universe_filtered['Price To Book'].set_index("Date").reindex(price_df.index).ffill()
             factor_df["Value"] = ptb_df.values.flatten()
 
         if "Momentum" in sensi_factors:
@@ -138,7 +151,7 @@ class PortfolioAnalysis:
 
         if "Quality" in sensi_factors:
             # print("Calcul du facteur Quality (ROE)...")
-            roe_df = self.universe_filtered['ROE'].set_index("Date").reindex(price_df.index).ffill()
+            roe_df = universe_filtered['ROE'].set_index("Date").reindex(price_df.index).ffill()
             factor_df["Quality"] = roe_df.values.flatten()
 
         if "Low Volatility" in sensi_factors:
@@ -147,7 +160,7 @@ class PortfolioAnalysis:
             factor_df["Low Volatility"] = rolling_vol.values.flatten()
         
         if "Market" in sensi_factors:
-            market_prices = self.universe_filtered['Market'].set_index("Date").reindex(price_df.index).ffill()
+            market_prices = universe_filtered['Market'].set_index("Date").reindex(price_df.index).ffill()
             market_return = market_prices.pct_change().dropna()
 
             beta_df = pd.DataFrame(index=returns_df.index, columns=returns_df.columns)
@@ -165,8 +178,8 @@ class PortfolioAnalysis:
 
         #  Filtrer sur les dates > start_date
         factor_df = factor_df.loc[factor_df["Date"] > computation_date_dt, :]
-        self.universe_filtered['Returns'] = returns_df.reset_index('Date')
-        print("Calcul des facteurs terminé.")
+        
+        # print("Calcul des facteurs terminé.")
         return factor_df
 
     @staticmethod
@@ -189,7 +202,6 @@ class PortfolioAnalysis:
         Returns:
             tuple(datetime, datetime): (start_date, end_date)
         """
-        # Trier et extraire les dates uniques du dataset Price
         price_dates = price_df['Date'].sort_values().unique()
 
         # Trouver les dates avant computation_date
@@ -212,8 +224,6 @@ class PortfolioAnalysis:
     def compute_half_life_factor(factor_df, target_factor):
         # Trouver la première valeur du facteur cible
         initial_value, initial_date = factor_df[[target_factor, 'Date']].iloc[0]
-
-        # Trouver la première date où la valeur est divisée par 2
         half_value = initial_value / 2
         half_life_date = None
 
@@ -225,25 +235,25 @@ class PortfolioAnalysis:
         half_life_days = None
         if half_life_date:
             half_life_days = (half_life_date - initial_date).days
-            print(f"La demi-vie du facteur '{target_factor}' est atteinte à la date {half_life_date}")
+            # print(f"La demi-vie du facteur '{target_factor}' est atteinte à la date {half_life_date}")
 
-            # Calcul du nombre de mois depuis la computation_date
             months_diff = (half_life_date.year - initial_date.year) * 12 + half_life_date.month - initial_date.month
-            print(f"Nombre de mois depuis la computation date: {months_diff} mois")
+            # print(f"Nombre de mois depuis la computation date: {months_diff} mois")
         else:
-            print(f"La valeur du facteur '{target_factor}' n'a jamais diminué de moitié dans la période analysée.")
-
+            # print(f"La valeur du facteur '{target_factor}' n'a jamais diminué de moitié dans la période analysée.")
+            pass
         return half_life_date, half_life_days
     
     
     
     @staticmethod
-    def plot_sensibilities(df, facteur : pd.DataFrame, computation_date_str : str, half_life_date_dt : datetime = None):
+    def plot_sensibilities(df : pd.DataFrame, facteur : pd.DataFrame, computation_date_str : str, half_life_date_dt : datetime = None):
         df["Date"] = pd.to_datetime(df["Date"])  
         start_date = df["Date"].iloc[0]  # Première date du dataset
 
         # Calcul du nombre de mois écoulés depuis la computation_date
         computation_date_dt = datetime.strptime(computation_date_str, "%Y-%m-%d")
+        df["Absolute Undesired Exposure"] = df.drop(columns=["Date", facteur], errors="ignore").abs().sum(axis=1)
         df["Months_Since_Start"] = (df["Date"] - start_date) / pd.Timedelta(days=30)
         
         # Calcul du nombre de mois depuis la demi-vie (si elle existe)
@@ -251,17 +261,13 @@ class PortfolioAnalysis:
         if half_life_date_dt:
             months_since_half_life = (half_life_date_dt.year - computation_date_dt.year) * 12 + half_life_date_dt.month - computation_date_dt.month
         
-        # Construction du titre
         title = f"Évolution des facteurs avec une stratégie {facteur} composé au {computation_date_str}"
         if months_since_half_life is not None:
             title += f"<br>Nombre de mois depuis la demi-vie : {months_since_half_life} mois"
         
-        # Création du graphique interactif avec Plotly
         fig = px.line(df, x="Months_Since_Start", y=df.columns[1:-1], 
                       labels={"value": "Facteur", "Months_Since_Start": "Holding Months Ahead"},
                       title=title)
-
-        # Affichage du graphique
         fig.show()
 
 
