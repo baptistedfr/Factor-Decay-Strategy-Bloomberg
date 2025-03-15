@@ -43,7 +43,7 @@ class PortfolioAnalysis:
                             end_date_str : str, 
                             Portfolio : BasePortfolio = FractilePortfolio,
                             rebalance_type : FrequencyType = FrequencyType.MONTHLY,
-                            transaction_fees : float = 0.0):
+                            transaction_fees : float = 0.0005):
         
         start_date_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
         end_date_dt = datetime.strptime(end_date_str, "%Y-%m-%d")
@@ -322,8 +322,8 @@ class PortfolioAnalysis:
         # Ajouter chaque facteur comme une colonne
         if "Value" in sensi_factors:
             # print("Calcul du facteur Value (P/B)...")
-            ptb_df = universe_filtered['Price To Book'].set_index("Date").reindex(price_df.index).ffill()
-            factor_df["Value"] = ptb_df.values.flatten()
+            ptb_df = universe_filtered['Price To Book'].set_index("Date") # .reindex(price_df.index).ffill()
+            factor_df["Value"] = - ptb_df.values.flatten()
 
         if "Momentum" in sensi_factors:
             # print("Calcul du facteur Momentum (12-1 month return)...")
@@ -333,13 +333,13 @@ class PortfolioAnalysis:
 
         if "Quality" in sensi_factors:
             # print("Calcul du facteur Quality (ROE)...")
-            roe_df = universe_filtered['ROE'].set_index("Date").reindex(price_df.index).ffill()
+            roe_df = universe_filtered['ROE'].set_index("Date") # .reindex(price_df.index).ffill()
             factor_df["Quality"] = roe_df.values.flatten()
 
         if "Low Volatility" in sensi_factors:
             # print("Calcul du facteur Low Volatility (252-day vol)...")
             rolling_vol = (price_df.pct_change().rolling(window=252).std())*np.sqrt(252)
-            factor_df["Low Volatility"] = rolling_vol.values.flatten()
+            factor_df["Low Volatility"] = - rolling_vol.values.flatten()
         
         if "Market" in sensi_factors:
             market_prices = universe_filtered['Market'].set_index("Date").reindex(price_df.index).ffill()

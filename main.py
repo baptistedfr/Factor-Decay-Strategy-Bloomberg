@@ -12,7 +12,7 @@ from analysis import PortfolioAnalysis, Universe
 def generate_half_life_analysis():
     ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
     sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
-    portfolios = [PureFactorPortfolio, FractilePortfolio]
+    portfolios = [FractilePortfolio, PureFactorPortfolio]
     dates = pd.date_range(start="2004-01-31", end="2025-01-31", freq="BM")
 
     for ptf_type in portfolios:
@@ -39,35 +39,37 @@ def generate_half_life_analysis():
 # generate_half_life_analysis()
 ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
 sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
-sensi = "Momentum"
+sensi = "Value"
 portfolio = FractilePortfolio
 
 
-# date = "2004-03-31"
-# sensibilities, half_life = ptf_analysis.get_factor_information(
-#                         target_factor=sensi,
-#                         sensi_factors=sensi_factors,
-#                         computation_date_str=date,
-#                         Portfolio=portfolio,
-#                         plot = True  
-#                     )
+date = "2014-06-30"
 
-start_date = "2013-03-31"
-end_date = "2025-01-31"
-combined_results = ptf_analysis.compare_strategies(
+
+sensibilities, half_life = ptf_analysis.get_factor_information(
                         target_factor=sensi,
                         sensi_factors=sensi_factors,
-                        start_date_str=start_date,
-                        end_date_str=end_date,
+                        computation_date_str=date,
                         Portfolio=portfolio,
-                        transaction_fees = 0.0
+                        plot = True  
                     )
 
-print(combined_results.df_statistics.head(10))
-combined_results.ptf_value_plot.show()
-combined_results.ptf_drawdown_plot.show() 
+# start_date = "2013-03-31"
+# end_date = "2025-01-31"
+# combined_results = ptf_analysis.compare_strategies(
+#                         target_factor=sensi,
+#                         sensi_factors=sensi_factors,
+#                         start_date_str=start_date,
+#                         end_date_str=end_date,
+#                         Portfolio=portfolio,
+#                         transaction_fees = 0.0
+#                     )
 
-for rebalancing_plot in combined_results.plt_rebalancing_plot:
-    rebalancing_plot.show()
+# print(combined_results.df_statistics.head(10))
+# combined_results.ptf_value_plot.show()
+# combined_results.ptf_drawdown_plot.show() 
+
+# for rebalancing_plot in combined_results.plt_rebalancing_plot:
+#     rebalancing_plot.show()
 
 
