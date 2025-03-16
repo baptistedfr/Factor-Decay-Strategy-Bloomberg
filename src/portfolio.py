@@ -7,6 +7,8 @@ from scipy.optimize import linprog
 from sklearn.covariance import LedoitWolf
 from enum import Enum
 import cvxpy as cp
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class Weighting_Type(Enum):
     EQUAL_WEIGHT = "EW"
@@ -65,6 +67,17 @@ class BasePortfolio(ABC):
             for factor in self.sensi_factors
         }
         return pd.Series(factor_exposures)
+
+    def plot_factor_distributions(self, df: pd.DataFrame):
+        """Trace la distribution des facteurs après calcul des z-scores."""
+        for factor in self.sensi_factors:
+            plt.figure(figsize=(10, 6))
+            sns.histplot(df[f'Zscore_{factor}'], kde=True, bins=30)
+            plt.title(f'Distribution de Zscore_{factor}')
+            plt.xlabel(f'Zscore_{factor}')
+            plt.ylabel('Fréquence')
+            plt.grid(True)
+            plt.show()
 
 
 class FractilePortfolio(BasePortfolio):

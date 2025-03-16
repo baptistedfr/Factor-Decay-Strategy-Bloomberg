@@ -1,6 +1,6 @@
 import pandas as pd
 import warnings
-from portfolio import FractilePortfolio, PureFactorPortfolio
+from src.portfolio import FractilePortfolio, PureFactorPortfolio
 import plotly.graph_objects as go
 from tqdm import tqdm
 warnings.filterwarnings("ignore")
@@ -39,37 +39,39 @@ def generate_half_life_analysis():
 # generate_half_life_analysis()
 ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
 sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
-sensi = "Value"
-portfolio = FractilePortfolio
+sensis = ["Momentum","Low Volatility"]
+portfolio = PureFactorPortfolio
 
 
-date = "2014-06-30"
+# date = "2014-06-30"
 
 
-sensibilities, half_life = ptf_analysis.get_factor_information(
-                        target_factor=sensi,
-                        sensi_factors=sensi_factors,
-                        computation_date_str=date,
-                        Portfolio=portfolio,
-                        plot = True  
-                    )
-
-# start_date = "2013-03-31"
-# end_date = "2025-01-31"
-# combined_results = ptf_analysis.compare_strategies(
+# sensibilities, half_life = ptf_analysis.get_factor_information(
 #                         target_factor=sensi,
 #                         sensi_factors=sensi_factors,
-#                         start_date_str=start_date,
-#                         end_date_str=end_date,
+#                         computation_date_str=date,
 #                         Portfolio=portfolio,
-#                         transaction_fees = 0.0
+#                         plot = True  
 #                     )
 
-# print(combined_results.df_statistics.head(10))
-# combined_results.ptf_value_plot.show()
-# combined_results.ptf_drawdown_plot.show() 
+start_date = "2010-01-31"
+end_date = "2016-01-31"
+for sensi in sensis:
+    combined_results = ptf_analysis.compare_strategies(
+                            target_factor=sensi,
+                            sensi_factors=sensi_factors,
+                            start_date_str=start_date,
+                            end_date_str=end_date,
+                            Portfolio=portfolio,
+                            transaction_fees = 0.0005
+                        )
 
-# for rebalancing_plot in combined_results.plt_rebalancing_plot:
-#     rebalancing_plot.show()
+    print(combined_results.df_statistics.head(10))
+    combined_results.df_statistics.to_excel(f"Results/{portfolio.__name__}_Strateg{sensi}_{start_date}_{end_date}.xlsx", index=True)
+    combined_results.ptf_value_plot.show()
+    combined_results.ptf_drawdown_plot.show() 
+
+    for rebalancing_plot in combined_results.plt_rebalancing_plot:
+        rebalancing_plot.show()
 
 

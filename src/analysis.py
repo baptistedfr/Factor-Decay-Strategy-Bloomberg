@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from portfolio import BasePortfolio, FractilePortfolio
+from portfolio import BasePortfolio, FractilePortfolio, PureFactorPortfolio
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from Utilities import get_rebalancing_dates
@@ -45,33 +45,21 @@ class PortfolioAnalysis:
                             rebalance_type : FrequencyType = FrequencyType.MONTHLY,
                             transaction_fees : float = 0.0005):
         
+        # Convertir les dates en objets datetime
         start_date_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
         end_date_dt = datetime.strptime(end_date_str, "%Y-%m-%d")
+        
+        # Étape 1 : Récupérer les tickers communs et filtrer les données
         common_tickers = self.get_tickers_in_range(start_date_dt, end_date_dt)
-
-        # Filtrage des données en fonction de la date et des tickers sélectionnés
-        price_df = self.universe_data['Price'] 
-        start_date, end_date = self.get_analysis_dates(price_df, computation_date = start_date_dt, end_date=end_date_dt)
-        
-        universe_filtered = {
-            key: df.loc[(df['Date'] >= start_date) & (df['Date'] <= end_date), ['Date'] + list(common_tickers)]
-            for key, df in self.universe_data.items() if key != 'compo'
-        }
-        
-        # Add the Market 
-        price_df = self.universe_data['Price']
-        market_df = price_df.loc[(price_df['Date'] >= start_date) & (price_df['Date'] <= end_date), ['Date', 'SPX Index']]
-        universe_filtered['Market'] = market_df
-
-        returns_df = universe_filtered['Price'].set_index("Date").pct_change().dropna().reset_index('Date')
-        universe_filtered['Returns'] = returns_df
+        universe_filtered = self.filter_universe_data(start_date_dt, end_date_dt, common_tickers)
 
         factor_df = self.__construct_dataframe_factors(universe_filtered, sensi_factors, start_date_dt)
 
         all_dates = sorted(set(factor_df["Date"].tolist()))
         portfolio = Portfolio(factor_df, target_factor, sensi_factors)
+
         # 🔸 Stratégie 1 : Rebalancement périodique
-        
+
         results_basic_strat = self.compute_strategy_performance(portfolio, 
                                                                 factor_df, 
                                                                 universe_filtered, 
@@ -91,9 +79,20 @@ class PortfolioAnalysis:
                                                                     f"{target_factor} Half life strategy {Portfolio.__name__}",
                                                                     fees = transaction_fees)
     
-        combined_results = Results.compare_results([results_basic_strat,results_half_date_strat])
-
-        return combined_results
+        combined_results = [results_basic_strat, results_half_date_strat]
+        
+        if Portfolio.__name__ == "PureFactorPortfolio":
+            # Stratégie 3 : Rebalancement sur exposition non désirée
+            results_undesired_strat = self.compute_strategy_performance(portfolio,
+                                                                        factor_df,
+                                                                        universe_filtered,
+                                                                        target_factor,
+                                                                        all_dates,
+                                                                        FrequencyType.UNDESIRED_EXPOSURE,
+                                                                        f"{target_factor} Undesired strategy {Portfolio.__name__}",
+                                                                        fees = transaction_fees)
+            combined_results.append(results_undesired_strat)
+        return Results.compare_results(combined_results)
     
     
     def compute_strategy_performance(self, portfolio: BasePortfolio, 
@@ -128,6 +127,7 @@ class PortfolioAnalysis:
 
         # Calcul de l'exposition initiale
         initial_exposure = ptf_sensi[factor]
+        undesired_exposure = ptf_sensi.drop(factor).abs().sum()
         
         if rebalance_type == FrequencyType.MONTHLY:
             # Si c'est un rebalancement mensuel, on vérifie la date de rebalancement
@@ -135,7 +135,7 @@ class PortfolioAnalysis:
         
         rebalancing_dt = []
 
-        for t in tqdm(range(1, len(all_dates)), desc=f"Running Backtesting {strategy_name}"):
+        for t in tqdm(range(1, len(all_dates)), desc=f"Running Backtesting {strategy_name}", leave = False):
 
             returns_dict = returns_df.loc[returns_df['Date'] == all_dates[t], list(actual_tickers)].squeeze().to_dict()
             prev_weights = np.array([weights_dict[all_dates[t-1]][ticker] for ticker in actual_tickers])
@@ -145,47 +145,28 @@ class PortfolioAnalysis:
             new_strat_value = strat_value * (1 + return_strat)
 
             # Rebalancement selon le type spécifié
-            if rebalance_type != FrequencyType.HALF_EXPOSURE:
-                if t in rebalancing_dates:
-                    rebalancing_dt.append(all_dates[t])
-                    actual_tickers = self.get_tickers_in_range(all_dates[t])
-                    df_subset = factor_df.loc[(factor_df["Date"] == all_dates[t]) & (factor_df['Ticker'].isin(list(actual_tickers))), :]
-                    index_date = int(returns_df.loc[returns_df['Date'] == all_dates[t], :].index[0])
-                    returns_ptf = returns_df.loc[(returns_df.index >= index_date - 252) & (returns_df.index <= index_date), ['Date'] + list(actual_tickers)]
-                    
-                    df_ptf, _ = portfolio.construct_portfolio(df_subset, rebalance_weight=True, returns=returns_ptf)
-                    new_weights = dict(zip(df_ptf['Ticker'], df_ptf['Weight']))
+            if rebalance_type == FrequencyType.MONTHLY and t in rebalancing_dates:
 
-                    # Calcul des frais de transaction
-                    all_tickers = set(weights.keys()).union(set(new_weights.keys()))
-                    transaction_costs = fees * np.sum(
-                        np.abs(np.array([new_weights.get(t, 0) - weights.get(t, 0) for t in all_tickers]))
-                    )
-                    total_fees+=transaction_costs
-                    new_strat_value -= strat_value * transaction_costs
-                else: 
-                    """Apply drift to weights"""
-                    new_weights = {ticker: weights[ticker] * (1 + returns_dict[ticker]) for ticker in weights}
+                rebalancing_dt.append(all_dates[t])
+                actual_tickers = self.get_tickers_in_range(all_dates[t])
+                df_ptf, ptf_sensi, new_weights = self.rebalance_strat(actual_tickers, all_dates[t], factor_df, returns_df, portfolio)
+
+                transaction_costs = self.calculate_transaction_costs(weights, new_weights, fees)
+                total_fees+=transaction_costs
+                new_strat_value -= strat_value * transaction_costs
+                
 
             elif rebalance_type == FrequencyType.HALF_EXPOSURE:
                 # Si c'est un rebalancement basé sur l'exposition
                 current_exposure = ptf_sensi[factor]
+
                 if current_exposure <= initial_exposure / 2:
                     rebalancing_dt.append(all_dates[t])
                     actual_tickers = self.get_tickers_in_range(all_dates[t])
-                    df_subset = factor_df.loc[(factor_df["Date"] == all_dates[t]) & (factor_df['Ticker'].isin(list(actual_tickers))), :]
-                    index_date = int(returns_df.loc[returns_df['Date'] == all_dates[t], :].index[0])
-                    returns_ptf = returns_df.loc[(returns_df.index >= index_date - 252) & (returns_df.index <= index_date), ['Date'] + list(actual_tickers)]
-                    
-                    df_ptf, ptf_sensi = portfolio.construct_portfolio(df_subset, rebalance_weight=True, returns=returns_ptf)
+                    df_ptf, ptf_sensi, new_weights = self.rebalance_strat(actual_tickers, all_dates[t], factor_df, returns_df, portfolio)
                     initial_exposure = ptf_sensi[factor]
-                    new_weights = dict(zip(df_ptf['Ticker'], df_ptf['Weight']))
 
-                    # Calcul des frais de transaction
-                    all_tickers = set(weights.keys()).union(set(new_weights.keys()))
-                    transaction_costs =  fees * np.sum(
-                        np.abs(np.array([new_weights.get(t, 0) - weights.get(t, 0) for t in all_tickers]))
-                    )
+                    transaction_costs = self.calculate_transaction_costs(weights, new_weights, fees)
                     total_fees+=transaction_costs
                     new_strat_value -= strat_value * transaction_costs
                 else:
@@ -194,7 +175,28 @@ class PortfolioAnalysis:
                     df_subset['Weight'] = df_subset['Ticker'].map(weights)
                     df_ptf, ptf_sensi = portfolio.construct_portfolio(df_subset, rebalance_weight=False, returns=False)
                     new_weights = {ticker: weights[ticker] * (1 + returns_dict[ticker]) for ticker in weights}
+            elif rebalance_type == FrequencyType.UNDESIRED_EXPOSURE:
+                # Nouvelle stratégie : Rebalancer si la somme des expositions aux autres facteurs dépasse celle du target_factor
+                undesired_exposure = ptf_sensi.drop(factor).abs().sum()
+                target_factor_exposure = ptf_sensi[factor]
 
+                if undesired_exposure >= target_factor_exposure:
+                    rebalancing_dt.append(all_dates[t])
+                    actual_tickers = self.get_tickers_in_range(all_dates[t])
+                    df_ptf, ptf_sensi, new_weights = self.rebalance_strat(actual_tickers, all_dates[t], factor_df, returns_df, portfolio)
+
+                    transaction_costs = self.calculate_transaction_costs(weights, new_weights, fees)
+                    total_fees += transaction_costs
+                    new_strat_value -= strat_value * transaction_costs
+                else:
+                    # Si l'exposition non désirée n'est pas supérieure, on applique simplement un drift aux poids et on recalcule les expos
+                    df_subset = factor_df.loc[(factor_df["Date"] == all_dates[t]) & (factor_df['Ticker'].isin(list(actual_tickers))), :]
+                    df_subset['Weight'] = df_subset['Ticker'].map(weights)
+                    df_ptf, ptf_sensi = portfolio.construct_portfolio(df_subset, rebalance_weight=False, returns=False)
+                    new_weights = {ticker: weights[ticker] * (1 + returns_dict[ticker]) for ticker in weights}            
+            else:
+                new_weights = {ticker: weights[ticker] * (1 + returns_dict[ticker]) for ticker in weights}
+            
             # Stockage des nouveaux poids et valeurs
             weights_dict[all_dates[t]] = new_weights
             stored_values.append(new_strat_value)
@@ -204,8 +206,48 @@ class PortfolioAnalysis:
 
         return self.output(f"{strategy_name}", stored_values, weights_dict, all_dates, rebalancing_dt, total_fees)
 
-    
+    def rebalance_strat(self, actual_tickers : list, date : datetime, 
+                        factor_df : pd.DataFrame, returns_df : pd.DataFrame, 
+                        portfolio : BasePortfolio) -> tuple:
+        """
+        Effectue le rebalancement du portefeuille à une date donnée.
 
+        Args:
+            actual_tickers (list): Liste des tickers actifs à la date donnée.
+            date (datetime): Date du rebalancement.
+            factor_df (pd.DataFrame): DataFrame contenant les facteurs.
+            returns_df (pd.DataFrame): DataFrame contenant les rendements.
+            portfolio (BasePortfolio): Instance du portefeuille.
+
+        Returns:
+            tuple: (df_ptf, ptf_sensi, new_weights)
+        """
+        # Filtrer factor_df pour la date et les tickers actifs
+        df_subset = factor_df.loc[(factor_df["Date"] == date) & (factor_df['Ticker'].isin(list(actual_tickers))), :]
+        
+        # Vérifier que la date existe dans returns_df et récupérer son index
+        index_date = int(returns_df.loc[returns_df['Date'] == date, :].index[0])
+        
+        # Récupérer les rendements sur une période de 252 jours avant la date
+        returns_ptf = returns_df.loc[
+            (returns_df.index >= index_date - 252) & (returns_df.index <= index_date), 
+            ['Date'] + list(actual_tickers)
+        ]
+        
+        # Construire le portefeuille avec les nouveaux poids
+        df_ptf, ptf_sensi = portfolio.construct_portfolio(
+            df_subset,
+            rebalance_weight=True,
+            returns=returns_ptf
+        )
+        
+        # Extraire les nouveaux poids sous forme de dictionnaire
+        new_weights = dict(zip(df_ptf['Ticker'], df_ptf['Weight']))
+        
+        return df_ptf, ptf_sensi, new_weights
+
+    
+    
     def output(self, strategy_name : str, stored_values : list[float], stored_weights : list[float], 
                dates : list, rebalancing_dates : list , 
                fees : float = 0, frequency_data : FrequencyType = FrequencyType.DAILY) -> Results :
@@ -249,23 +291,10 @@ class PortfolioAnalysis:
         computation_date_dt = datetime.strptime(computation_date_str, "%Y-%m-%d")
         common_tickers = self.get_tickers_in_range(computation_date_dt)
 
-        # Filtrage des données en fonction de la date et des tickers sélectionnés
-        price_df = self.universe_data['Price'] 
-        start_date, end_date = self.get_analysis_dates(price_df, computation_date_dt)
-        
-        universe_filtered = {
-            key: df.loc[(df['Date'] >= start_date) & (df['Date'] <= end_date), ['Date'] + list(common_tickers)]
-            for key, df in self.universe_data.items() if key != 'compo'
-        }
-        
-        # Add the Market 
-        price_df = self.universe_data['Price']
-        market_df = price_df.loc[(price_df['Date'] >= start_date) & (price_df['Date'] <= end_date), ['Date', 'SPX Index']]
-        universe_filtered['Market'] = market_df
-
-        returns_df = universe_filtered['Price'].set_index("Date").pct_change().dropna().reset_index('Date')
-        universe_filtered['Returns'] = returns_df
+        universe_filtered = self.filter_universe_data(computation_date_dt, None, common_tickers)
     
+        returns_df = universe_filtered['Returns']
+
         factor_df = self.__construct_dataframe_factors(universe_filtered, sensi_factors, computation_date_dt)
 
         all_dates = sorted(set(factor_df["Date"].tolist()))
@@ -294,11 +323,30 @@ class PortfolioAnalysis:
         half_life_date, half_life_days = self.compute_half_life_factor(sensi_historic, target_factor) 
         
         if plot:
-            print(f"Période d'analyse : {start_date} -> {end_date}")
+            print(f"Période d'analyse : {sensi_historic['Date'].iloc[0]} -> {sensi_historic['Date'].iloc[-1]}")
             self.plot_sensibilities(sensi_historic, target_factor, computation_date_str, half_life_date)
 
         return sensi_historic, half_life_days
     
+    def filter_universe_data(self, start_date_dt, end_date_dt, common_tickers):
+        """
+        Filtre les données de l'univers en fonction des dates et des tickers communs.
+        """
+        start_date, end_date = self.get_analysis_dates(self.universe_data['Price'], start_date_dt, end_date=end_date_dt)
+        universe_filtered = {
+            key: df.loc[(df['Date'] >= start_date) & (df['Date'] <= end_date), ['Date'] + list(common_tickers)]
+            for key, df in self.universe_data.items() if key != 'compo'
+        }
+        # Add the Market
+        market_df = self.universe_data['Price'].loc[
+            (self.universe_data['Price']['Date'] >= start_date) & 
+            (self.universe_data['Price']['Date'] <= end_date), 
+            ['Date', 'SPX Index']
+        ]
+        universe_filtered['Market'] = market_df
+        universe_filtered['Returns'] = universe_filtered['Price'].set_index("Date").pct_change().dropna().reset_index('Date')
+        return universe_filtered
+
     @staticmethod
     def __construct_dataframe_factors(universe_filtered, sensi_factors: list[str], computation_date_dt : datetime):
         """
@@ -322,7 +370,7 @@ class PortfolioAnalysis:
         # Ajouter chaque facteur comme une colonne
         if "Value" in sensi_factors:
             # print("Calcul du facteur Value (P/B)...")
-            ptb_df = universe_filtered['Price To Book'].set_index("Date") # .reindex(price_df.index).ffill()
+            ptb_df = universe_filtered['Price To Book'].set_index("Date").reindex(price_df.index).ffill()
             factor_df["Value"] = - ptb_df.values.flatten()
 
         if "Momentum" in sensi_factors:
@@ -333,7 +381,7 @@ class PortfolioAnalysis:
 
         if "Quality" in sensi_factors:
             # print("Calcul du facteur Quality (ROE)...")
-            roe_df = universe_filtered['ROE'].set_index("Date") # .reindex(price_df.index).ffill()
+            roe_df = universe_filtered['ROE'].set_index("Date").reindex(price_df.index).ffill()
             factor_df["Quality"] = roe_df.values.flatten()
 
         if "Low Volatility" in sensi_factors:
@@ -451,6 +499,29 @@ class PortfolioAnalysis:
 
         return start_date, end_date
     
+    @staticmethod
+    def calculate_transaction_costs(old_weights: dict, new_weights: dict, fees: float) -> float:
+        """
+        Calcule les frais de transaction basés sur les changements de poids.
+
+        Args:
+            old_weights (dict): Poids des actifs avant le rebalancement (ticker -> poids).
+            new_weights (dict): Poids des actifs après le rebalancement (ticker -> poids).
+            fees (float): Taux des frais de transaction (par exemple, 0.0005 pour 0.05%).
+
+        Returns:
+            float: Coût total des transactions.
+        """
+        # Obtenir l'ensemble des tickers impliqués
+        all_tickers = set(old_weights.keys()).union(set(new_weights.keys()))
+
+        # Calculer les frais de transaction pour chaque ticker
+        transaction_costs = fees * np.sum(
+            np.abs(np.array([new_weights.get(t, 0) - old_weights.get(t, 0) for t in all_tickers]))
+        )
+
+        return transaction_costs
+        
     @staticmethod
     def compute_half_life_factor(factor_df, target_factor):
         # Trouver la première valeur du facteur cible
