@@ -1,12 +1,12 @@
 import pandas as pd
 import warnings
 from src.portfolio import FractilePortfolio, PureFactorPortfolio
+from src.enums import Universe
+from src.analysis import PortfolioAnalysis
 import plotly.graph_objects as go
 from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
-
-from analysis import PortfolioAnalysis, Universe
 
 
 def generate_half_life_analysis():
@@ -39,7 +39,7 @@ def generate_half_life_analysis():
 # generate_half_life_analysis()
 ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
 sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
-sensis = ["Momentum","Low Volatility"]
+sensis = ["Momentum"]
 portfolio = PureFactorPortfolio
 
 
@@ -54,8 +54,8 @@ portfolio = PureFactorPortfolio
 #                         plot = True  
 #                     )
 
-start_date = "2010-01-31"
-end_date = "2016-01-31"
+start_date = "2013-01-31"
+end_date = "2018-01-31"
 for sensi in sensis:
     combined_results = ptf_analysis.compare_strategies(
                             target_factor=sensi,
