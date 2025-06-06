@@ -135,8 +135,8 @@ class PortfolioAnalysis:
         
         rebalancing_dt = []
 
-        for t in tqdm(range(1, len(all_dates)), desc=f"Running Backtesting {strategy_name}", leave = False):
-
+        #for t in tqdm(range(1, len(all_dates)), desc=f"Running Backtesting {strategy_name}", leave = False):
+        for t in range(1, len(all_dates)):
             returns_dict = returns_df.loc[returns_df['Date'] == all_dates[t], list(actual_tickers)].squeeze().to_dict()
             prev_weights = np.array([weights_dict[all_dates[t-1]][ticker] for ticker in actual_tickers])
 

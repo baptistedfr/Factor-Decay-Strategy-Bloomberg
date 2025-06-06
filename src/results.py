@@ -28,7 +28,7 @@ class Results:
     data_frequency : FrequencyType
     ptf_weights : Optional[pd.DataFrame] = None
     ptf_rebalancing : pd.Series = None
-    rf : float = 0.02
+    rf : float = 0.0  # Risk-free rate, default to 0.0
     total_fees : float = 0
     df_statistics : pd.DataFrame = None
     ptf_value_plot : go.Figure = None

@@ -395,44 +395,36 @@ class DataLoader():
                 if ticker not in df_fin.columns:
                     df_fin[ticker] = 0
             
-            # Marque la présence des tickers à cette date
             df_fin.loc[date_str, tickers] = 1
         blp.closeSession()
         return df_fin
 
 
-    def load_historical_data(self, tickers, fields, start_date=None, end_date=None):
+    def load_historical_data(self, tickers, fields = ['RETURN_COM_EQY', 'PX_TO_BOOK_RATIO', 'PX_LAST'], start_date=None, end_date=None):
         """
         Récupère les données Bloomberg pour une liste de tickers et de champs.
         Décale de 3 mois tous les champs sauf 'PX_LAST' dans le temps (shift temporel).
+        Il faut que les tickers soient au format Bloomberg (par exemple, 'AAPL US Equity').
         """
         blp = BLP()
 
         # Récupération des données
-        df = blp.bdh(
+        dict_bdh = blp.bdh(
             strSecurity=tickers,
             strFields=fields,
             startdate=start_date,
             enddate=end_date,
             per='DAILY'
         )
+        for field, df_field in dict_bdh.items():
+            try:
+                df_field.set_index('Date', inplace=True)
+            except KeyError:
+                print(f"Warning: 'Date' column not found in field '{field}'. Skipping index setting.")
+                continue
 
-        # Vérifie que l'index est bien temporel
-        if not isinstance(df.index, pd.DatetimeIndex):
-            df.index = pd.to_datetime(df.index)
+            if field != 'PX_LAST':
+                # Décale les données de 3 mois pour tous les champs sauf 'PX_LAST'
+                dict_bdh[field] = df_field.shift(63)
 
-        # Traitement des données si multi-index (cas multi-ticker avec champs en colonnes hiérarchiques)
-        if isinstance(df.columns, pd.MultiIndex):
-            for field in fields:
-                if field != 'PX_LAST' and field in df.columns.levels[0]:
-                    for ticker in df[field].columns:
-                        df[(field, ticker)] = df[(field, ticker)].shift(periods=3, freq='M')
-        else:
-            # Cas simple : colonnes plates
-            for field in fields:
-                if field != 'PX_LAST' and field in df.columns:
-                    df[field] = df[field].shift(periods=3, freq='M')
-
-        blp.closeSession()
-        return df
-
+        
