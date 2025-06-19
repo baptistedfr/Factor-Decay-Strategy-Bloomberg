@@ -92,7 +92,7 @@ class PortfolioAnalysis:
                                                                         f"{target_factor} Undesired strategy {Portfolio.__name__}",
                                                                         fees = transaction_fees)
             combined_results.append(results_undesired_strat)
-        return Results.compare_results(combined_results)
+        return Results.compare_results(combined_results), combined_results
     
     
     def compute_strategy_performance(self, portfolio: BasePortfolio, 
@@ -341,7 +341,7 @@ class PortfolioAnalysis:
         market_df = self.universe_data['Price'].loc[
             (self.universe_data['Price']['Date'] >= start_date) & 
             (self.universe_data['Price']['Date'] <= end_date), 
-            ['Date', 'SPX Index']
+            ['Date', 'Index']
         ]
         universe_filtered['Market'] = market_df
         universe_filtered['Returns'] = universe_filtered['Price'].set_index("Date").pct_change().dropna().reset_index('Date')

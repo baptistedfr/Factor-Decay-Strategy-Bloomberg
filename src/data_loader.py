@@ -396,8 +396,10 @@ class DataLoader():
                     df_fin[ticker] = 0
             
             df_fin.loc[date_str, tickers] = 1
+
+        df_fin.index = pd.to_datetime(df_fin.index, format = "%Y%m%d")
         blp.closeSession()
-        return df_fin
+        return df_fin.reset_index().rename(columns = {"index":"Date"})
 
 
     def load_historical_data(self, tickers, fields = ['RETURN_COM_EQY', 'PX_TO_BOOK_RATIO', 'PX_LAST'], start_date=None, end_date=None):
@@ -417,14 +419,14 @@ class DataLoader():
             per='DAILY'
         )
         for field, df_field in dict_bdh.items():
-            try:
-                df_field.set_index('Date', inplace=True)
-            except KeyError:
-                print(f"Warning: 'Date' column not found in field '{field}'. Skipping index setting.")
-                continue
+          
 
             if field != 'PX_LAST':
                 # Décale les données de 3 mois pour tous les champs sauf 'PX_LAST'
                 dict_bdh[field] = df_field.shift(63)
+                dict_bdh[field] = dict_bdh[field].reset_index().rename(columns = {"index":"Date"}) 
+                
+        return dict_bdh        
+
 
         

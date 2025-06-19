@@ -1,7 +1,15 @@
 from enum import Enum
 
 class Universe(Enum):
-    SP500  = {"compo": "COMPO_SP500.parquet", "Price": "PX_LAST.parquet", "Price To Book":"PTB.parquet", "ROE":"ROE.parquet"}
+    SP500  = {"compo": "COMPO_SP500.parquet", 
+              "Price": "PX_LAST_SP500.parquet", 
+              "Price To Book":"PTB_SP500.parquet", 
+              "ROE":"ROE_SP500.parquet"}
+    
+    CAC40  = {"compo": "COMPO_CAC40.xlsx", 
+              "Price": "PX_LAST_CAC.xlsx", 
+              "Price To Book":"PTB_CAC.xlsx", 
+              "ROE":"ROE_CAC.xlsx"}
 
 class FrequencyType(Enum):
     DAILY = 252 # 252 jours de trading dans une année

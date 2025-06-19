@@ -155,7 +155,29 @@ def run_factor_backtest(
 
 
 ptf_analysis = PortfolioAnalysis(universe=Universe.SP500)
+start_date = "2013-01-31"
+end_date = "2018-01-31"
+ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
+sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
+sensis = ["Momentum","Value","Quality","Low Volatility"]
+sensi = "Momentum"
+portfolio = PureFactorPortfolio
+combined_results, liste = ptf_analysis.compare_strategies(
+                            target_factor=sensi,
+                            sensi_factors=sensi_factors,
+                            start_date_str=start_date,
+                            end_date_str=end_date,
+                            Portfolio=portfolio,
+                            transaction_fees = 0
+                        )
 
+print(combined_results.df_statistics.head(10))
+combined_results.df_statistics.to_excel(f"Results/{portfolio.__name__}_Strateg{sensi}_{start_date}_{end_date}.xlsx", index=True)
+combined_results.ptf_value_plot.show()
+combined_results.ptf_drawdown_plot.show() 
+
+for rebalancing_plot in combined_results.plt_rebalancing_plot:
+    rebalancing_plot.show()
 # run_factor_backtest(
 #     ptf_analysis=ptf_analysis,
 #     portfolio_class=PureFactorPortfolio,
@@ -169,15 +191,15 @@ ptf_analysis = PortfolioAnalysis(universe=Universe.SP500)
 #     verbose=True
 # )
 
-run_factor_backtest(
-    ptf_analysis=ptf_analysis,
-    portfolio_class=FractilePortfolio,
-    sensi_factors=["Momentum", "Value", "Quality", "Low Volatility", "Market"],
-    sensis=["Momentum", "Value", "Quality", "Low Volatility"],
-    global_start = "2004-01-31",
-    global_end = "2019-04-30",
-    window_years = 5,
-    frequency= 'Q',
-    output_path = "Results/FractilePortfolio_5Y_Quarterly_Stats.xlsx",
-    verbose=True
-)
+# run_factor_backtest(
+#     ptf_analysis=ptf_analysis,
+#     portfolio_class=FractilePortfolio,
+#     sensi_factors=["Momentum", "Value", "Quality", "Low Volatility", "Market"],
+#     sensis=["Momentum", "Value", "Quality", "Low Volatility"],
+#     global_start = "2004-01-31",
+#     global_end = "2019-04-30",
+#     window_years = 5,
+#     frequency= 'Q',
+#     output_path = "Results/FractilePortfolio_5Y_Quarterly_Stats.xlsx",
+#     verbose=True
+# )
