@@ -154,10 +154,10 @@ def run_factor_backtest(
 
 
 
-ptf_analysis = PortfolioAnalysis(universe=Universe.SP500)
-start_date = "2013-01-31"
-end_date = "2018-01-31"
-ptf_analysis = PortfolioAnalysis(universe = Universe.SP500)
+
+start_date = "2019-12-31"
+end_date = "2024-12-31"
+ptf_analysis = PortfolioAnalysis(universe = Universe.CAC40)
 sensi_factors = ["Momentum","Value","Quality","Low Volatility","Market"]
 sensis = ["Momentum","Value","Quality","Low Volatility"]
 sensi = "Momentum"
@@ -168,11 +168,10 @@ combined_results, liste = ptf_analysis.compare_strategies(
                             start_date_str=start_date,
                             end_date_str=end_date,
                             Portfolio=portfolio,
-                            transaction_fees = 0
+                            transaction_fees = 0.0005
                         )
 
 print(combined_results.df_statistics.head(10))
-combined_results.df_statistics.to_excel(f"Results/{portfolio.__name__}_Strateg{sensi}_{start_date}_{end_date}.xlsx", index=True)
 combined_results.ptf_value_plot.show()
 combined_results.ptf_drawdown_plot.show() 
 

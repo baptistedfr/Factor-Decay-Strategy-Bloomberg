@@ -6,10 +6,10 @@ class Universe(Enum):
               "Price To Book":"PTB_SP500.parquet", 
               "ROE":"ROE_SP500.parquet"}
     
-    CAC40  = {"compo": "COMPO_CAC40.xlsx", 
-              "Price": "PX_LAST_CAC.xlsx", 
-              "Price To Book":"PTB_CAC.xlsx", 
-              "ROE":"ROE_CAC.xlsx"}
+    CAC40  = {"compo": "COMPO_CAC40.parquet", 
+              "Price": "PX_LAST_CAC.parquet", 
+              "Price To Book":"PTB_CAC.parquet", 
+              "ROE":"ROE_CAC.parquet"}
 
 class FrequencyType(Enum):
     DAILY = 252 # 252 jours de trading dans une année
